@@ -20,18 +20,18 @@ And then an example usage:
 ```rust
 extern crate hamt;
 
-use hamt::HAMT;
+use hamt::hamt::HAMT;
 
 fn main() {
     let amt: HAMT<uint, uint> = HAMT::new();
 
     for a in range(0, 10u) {
         let cloned_amt = amt.clone();
-        spawn(proc({
+        spawn(proc() {
             for x in range(a*100, (a+1)*100u) { 
                 cloned_amt.insert(a, a);
             }
-        }));
+        });
     }
 }
 ```
@@ -49,8 +49,7 @@ Notes
 ----------------------------------------------------------------------
 Credit
 - See the top of every source file for citations to research papers I
-  used for references while making this. No source is responsible for 
-  my own errors.
+  used for references while making this.
 
 Compatibility
 - This project was developed and tested on OS X, however, since it doesn't rely

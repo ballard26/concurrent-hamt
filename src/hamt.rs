@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn mixed_ins_remove_parallel() {
-         let amt: HAMT<uint, uint> = HAMT::new();
+        let amt: HAMT<uint, uint> = HAMT::new();
         let barrier = Arc::new(Barrier::new(num_threads+1));
 
         for x in range(0, num_threads) {
