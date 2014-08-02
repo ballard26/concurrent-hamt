@@ -14,7 +14,7 @@ dropped the structure will be deallocated.
 Add this to your Cargo.toml:
 ```toml
 [dependencies.hamt]
-git = "https://github.com/ballard26/rust-concurrent-hamt"
+git = "https://github.com/ballard26/concurrent-hamt"
 ```
 
 And then an example usage:
