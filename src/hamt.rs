@@ -14,7 +14,6 @@
  * - (N, 1) Make HazardHead in hp.rs pub and add it to HAMT, this with allow
  *   us to delete it when the HAMT is deleted(right now it isn't being
  *   deleted at all).
- * - (N, 2) Implement a 'count' function to Bitv that uses POPCNT instruction.
  * - (N, ?) Use index resizing to bring search from O(log(n)) -> O(1).
  *      - Resizing makes sense on a mutable imperative structure, however,
  *        the naive way of doing it is detrimental to a persistent functional
@@ -36,15 +35,14 @@
  */
 
 use std::hash::{Hash, Hasher, sip};
-use std::collections::bitv::Bitv;
 use hp::{ProtectedPointer, Hp};
+use bits::Bits;
 use std::rand;
 
 // Settings for 64bit (0x3f, 6, 64, 64). 
 static index_map: uint = 0x1f;
 static index_size: uint = 5;
 static hash_size: uint = 64;
-static map_size: uint = 32;
 
 pub struct HAMT<K,V> {
     hash_base: u64,
@@ -59,20 +57,17 @@ pub struct HAMT<K,V> {
 // each state are the possible states it can transition into.
 enum HAMTInner<K, V> {
     // RootedNode -> RootedNode: Add/remove an element to vec.
-    RootedNode(Bitv, Vec<Hp<HAMTInner<K,V>>>),
+    RootedNode(uint, Vec<Hp<HAMTInner<K,V>>>),
     // MappedNode -> MappedNode: Add/remove an element to vec.
     // MappedNode -> DeletedMap: vec.len() < 2.
-    MappedNode(Bitv, Vec<Hp<HAMTInner<K,V>>>),
+    MappedNode(uint, Vec<Hp<HAMTInner<K,V>>>),
     // ValuedNode -> MappedNode: collision with another ValuedNode
     // ValuedNode -> DeletedVal: removal from HAMT.
     ValuedNode(K, V),
     // Parent is modified to include any vals in vec.
-    DeletedMap(Bitv, Vec<Hp<HAMTInner<K,V>>>),
+    DeletedMap(uint, Vec<Hp<HAMTInner<K,V>>>),
     // Parent is modified to remove DeletedVal from vec.
     DeletedVal
-    // A delayed resolution of conflicting indexes in hash until
-    // insert of values in vec don't require a depth increase.
-    //PromiseVal(uint, uint, Hp<HAMTInner<K,V>>),
 }
 
 impl<K,V> Clone for HAMT<K,V> {
@@ -89,8 +84,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
         HAMT {
             hash_base: rand::random::<u64>(),
             root: Hp::init(RootedNode(
-                    Bitv::with_capacity(map_size, false),
-                    Vec::with_capacity(1)))
+                    0, Vec::with_capacity(1)))
         }
     }
 
@@ -157,7 +151,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                             }
                             Err(idx) => {
                                 let mut bitmap = map.clone();
-                                bitmap.set(state.uncompressed_index(&key), true);
+                                bitmap.set(state.current_uncompressed_index(), true);
 
                                 let mut arrmap = arr.clone();
                                 arrmap.insert(idx, ins_node.clone());
@@ -175,7 +169,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         if *k == key {
                             return;
                         } else {
-                            let mut bitmap = Bitv::with_capacity(map_size, false);
+                            let mut bitmap = 0u; 
                             bitmap.set(state.uncompressed_index(k), true);
 
                             let mut arrmap = Vec::with_capacity(1);
@@ -202,7 +196,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                     Ok(_) =>
                         if cont_search { continue 'search }
                         else { return },
-                    // Shouldn't  I be able to continue search here?
+                    // Shouldn't I be able to continue search here?
                     Err(_) => continue 'start 
                 };
             }
@@ -262,14 +256,12 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                     }
                 };
                 
-                // Attempt to replace the current known value of writer current
-                // with the newly created value.
                 match cur_node.replace(new_node) {
                     Ok(_) => {
                         self.repair_deleted_node(&mut pre_node, state.prev(), None);
                         return true;
                     }
-                    // Shouldn't  I be able to continue search here?
+                    // Shouldn't I be able to continue search here?
                     Err(_) => continue 'start
                 };
             }
@@ -281,7 +273,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
     fn repair_deleted_node<'a>(&self,
                                value: &mut ProtectedPointer<HAMTInner<K,V>>,
                                sstate: &mut SearchState<'a, K>,
-                               insert: Option<(&Bitv, &Vec<Hp<HAMTInner<K,V>>>)>
+                               insert: Option<(&uint, &Vec<Hp<HAMTInner<K,V>>>)>
                                ) -> bool {
         let (new_node, ret_val) = match **value {
             ref node @ MappedNode(..) 
@@ -302,10 +294,13 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                             Some((map, arr)) => {
                                 let val = &arr[0];
                                 let mut temp_value = ProtectedPointer::new(val);
-                                // Load is fine since calling function is protecting the Hp
+
+                                // Load is fine since the calling function is 
+                                // protecting the Hp.
                                 temp_value.load();
 
-                                // See if remaining element in a DeletedMap could be contracted.
+                                // See if the remaining element in a DeletedMap 
+                                // can be contracted.
                                 match *temp_value {
                                     MappedNode(..)
                                     | DeletedMap(..) =>
@@ -315,12 +310,12 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                                     ValuedNode(..) =>
                                         arrmap.insert(idx, val.clone()),
                                     DeletedVal =>
-                                        bitmap.set(sstate.uncompressed_index(sstate.curr_key), false),
+                                        bitmap.set(sstate.current_uncompressed_index(), false),
                                     _ => fail!("Unexpected value!")
                                 }
                             }
                             None =>
-                                bitmap.set(sstate.uncompressed_index(sstate.curr_key), false)
+                                bitmap.set(sstate.current_uncompressed_index(), false)
                         };
 
                         // MappedNode's less than a certain length should be
@@ -343,8 +338,8 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
             _ => return false
         };
 
-        // Note there is no guarantee that the cur_node
-        // is pointing to valid data or not. However, that
+        // There is no guarantee that the cur_node is
+        // pointing to valid data or not. However, that
         // doesn't matter, either the current address is the 
         // same as the previously read one, or it changed.
         // We don't bother reading the changed one, hence it
@@ -408,7 +403,7 @@ impl<'a, K: Hash> SearchState<'a, K> {
             
             self.hash_gen = sip::SipHasher::new_with_keys(self.hash_base, (self.curr_lvl - lvls_per_hash) as u64);
             self.curr_hsh = (self.hash_gen).hash(self.curr_key);
-            self.bits_lft = index_size + (hash_size - lvls_per_hash); // Ensure this is right!
+            self.bits_lft = index_size + (hash_size - lvls_per_hash);
         } else {
             self.bits_lft += index_size;
         }
@@ -418,15 +413,11 @@ impl<'a, K: Hash> SearchState<'a, K> {
     }
 
     #[inline(always)]
-    fn compressed_index(&mut self, bitmap: &Bitv) -> Result<uint, uint> {
+    fn compressed_index(&mut self, bitmap: &uint) -> Result<uint, uint> {
         let uncompressed_index = (self.curr_hsh >> (self.curr_lvl * index_size)) 
                                     & index_map as u64;
 
-        // Change to POPCNT.
-        let compressed_index = bitmap.iter()
-                                     .skip((uncompressed_index+1) as uint)
-                                     .filter(|x| *x)
-                                     .count();
+        let compressed_index = bitmap.count((uncompressed_index+1) as uint);
         
         if bitmap.get(uncompressed_index as uint) {
             Ok(compressed_index) 
@@ -439,6 +430,11 @@ impl<'a, K: Hash> SearchState<'a, K> {
     fn uncompressed_index(&mut self, key: &K) -> uint {
         let hash = self.hash_gen.hash(key);
         ((hash >> (self.curr_lvl * index_size)) & index_map as u64) as uint
+    }
+
+    #[inline(always)]
+    fn current_uncompressed_index(&mut self) -> uint {
+        ((self.curr_hsh >> (self.curr_lvl * index_size)) & index_map as u64) as uint
     }
 }
 
@@ -453,7 +449,7 @@ mod tests {
     use super::HAMT;
     
     static num_threads: uint = 8; 
-    static num_elements: uint = 10000;
+    static num_elements: uint = 50000;
 
     #[test]
     fn all_accounted_for() {
@@ -534,6 +530,9 @@ mod tests {
             TaskBuilder::new().native().spawn(proc() {
                 for i in range((num_elements*x), num_elements*(x+1)) {    
                         lamt.remove(i);
+                        if lamt.search(i).is_some() {
+                            fail!("Twas a failed attempt");
+                        }
                 }
                 c.wait();
             });
@@ -542,7 +541,7 @@ mod tests {
         barrier.wait();
         for i in range(0, num_threads*num_elements) {
             if amt.search(i).is_some() {
-                print!("{}, ", i);
+                fail!("Dooooom");
             }
         }
     }

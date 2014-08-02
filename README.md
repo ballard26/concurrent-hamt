@@ -1,6 +1,7 @@
-[![Build Status](https://travis-ci.org/ballard26/concurrent-hamt.svg?branch=master)](https://travis-ci.org/ballard26/concurrent-hamt)
 Concurrent, wait-free, non-blocking, hash array mapped trie in Rust
 ----------------------------------------------------------------------
+[![Build Status](https://travis-ci.org/ballard26/concurrent-hamt.svg?branch=master)](https://travis-ci.org/ballard26/concurrent-hamt)
+
 A naive/experimental implementation of a concurrent HAMT using 
 HazardPointers for safe memory deallocation and an exponential back-off 
 algorithm for basic memory contention management.
@@ -37,20 +38,13 @@ fn main() {
 }
 ```
 
-Performance
-----------------------------------------------------------------------
-Horrible.
-
 Todo
 ----------------------------------------------------------------------
-Check the top of every source file for a todo list. 
+Check the top of every source file for a todo list. All comments and 
+contributions are more than welcome.
 
 Notes
 ----------------------------------------------------------------------
-Credit
-- See the top of source files for citations to research papers I referenced while
-  writing code in the file.
-
 Compatibility
 - This project was only tested on OS X and Linux, no guarantee it will work on Windows.
 - As with above it was also only tested on x64_86 and x86. It will most likely work on 
@@ -65,3 +59,15 @@ Error Handling
   due to the non-deterministic nature of a specific event.
     E.g. when replacing a value in ProtectedPointer it is impossible to determine
     if a value you expect to be there still is, hence a Result value is returned.
+
+Sources Referenced
+----------------------------------------------------------------------
+Bagwell, Phil (2000). "Ideal Hash Trees".
+<br>&nbsp;&nbsp;&nbsp;Infoscience Department, École Polytechnique Fédérale de Lausanne.
+<br>Prokopec, A., Bronson N., Bagwell P., Odersky M. (2011).
+<br>&nbsp;&nbsp;&nbsp;"Concurrent Tries with Efficient Non-Blocking Snapshots".
+<br>Andrei Alexandrescu and Maged Michael (2004).
+<br>&nbsp;&nbsp;&nbsp;"Lock-Free Data Structures with Hazard Pointers". Dr Dobbs.
+<br>Dave Dice, Danny Hendler, Ilya Mirsky (2013).
+<br>&nbsp;&nbsp;&nbsp;"Lightweight Contention Management for Efficient Compare-and-Swap Operations".
+<br>&nbsp;&nbsp;&nbsp;arXiv:1305.5800.

@@ -171,13 +171,11 @@ impl<T> Drop for Hp<T> {
 }
 
 impl<T> Hp<T> {
-    /// Initializes a Hp<T> that should be used as the root of a data strcuture
+    /// Initializes a Hp<T> that should be used as the root of a data structure
     /// whose deletions are safely managed by the HazardPointer library
     /// 
-    /// Effects
-    /// ===========
-    /// Creates an internal linkedlist to track what data is being used at the momment.
-    /// The list is deleted upon deletion of the Hp created with init()
+    /// Creates an internal linkedlist to track what data is being used at the
+    /// moment.
     #[inline(always)]
     pub fn init(data: T) -> Hp<T> {
         let new_head: Box<HazardList<T>> = box HazardList::new();
@@ -195,10 +193,8 @@ impl<T> Hp<T> {
     /// Used to interconnect data structures connected with a preexisting
     /// Hp<T>.
     ///
-    /// Effects
-    /// ===========
     /// Returns a Hp<T> whose internal data is managed by the same
-    /// internal hazardhead.
+    /// internal HazardList. 
     #[inline(always)]
     pub fn new(&self, data: T) -> Hp<T> {
         let new_inner: Box<HpInner<T>> = box HpInner {
@@ -237,8 +233,7 @@ impl<T> HpInner<T> {
     /// granularity until they don't present a hazard.
     ///
     /// Old or new data is added to a task-local vec until it can be 
-    /// safely deleted. If the replacement fails an HpErr is returned
-    /// describing the reasons why.
+    /// safely deleted.
     #[inline(always)]
     fn replace(&mut self, current: *mut InnerProtect<T>, new: T) -> Result<(), ()> {
         unsafe {

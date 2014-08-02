@@ -4,8 +4,8 @@
 #![license = "MIT"]
 #![experimental]
 
-/* Lets see how many buzzwords we can fit... */
 //! A Concurrent, persistent, wait-free, non-blocking, hash map array trie.
 
-pub mod hp;
 pub mod hamt;
+pub mod hp;
+mod bits;
