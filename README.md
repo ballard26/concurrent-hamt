@@ -1,7 +1,6 @@
- [![Build Status](https://travis-ci.org/ballard26/concurrent-hamt.svg?branch=master)](https://travis-ci.org/ballard26/concurrent-hamt)
-Concurrent, wait-free, non-blocking, hash array map trie in Rust
+[![Build Status](https://travis-ci.org/ballard26/concurrent-hamt.svg?branch=master)](https://travis-ci.org/ballard26/concurrent-hamt)
+Concurrent, wait-free, non-blocking, hash array mapped trie in Rust
 ----------------------------------------------------------------------
-
 A naive/experimental implementation of a concurrent HAMT using 
 HazardPointers for safe memory deallocation and an exponential back-off 
 algorithm for basic memory contention management.
@@ -49,15 +48,13 @@ Check the top of every source file for a todo list.
 Notes
 ----------------------------------------------------------------------
 Credit
-- See top of source files for citations to research papers I referenced while
-  writing code in file.
+- See the top of source files for citations to research papers I referenced while
+  writing code in the file.
 
 Compatibility
-- This project was developed and tested on OS X, however, since it doesn't rely
-  on any OS dependent libs it is very likely to work on Linux and maybe Windows.
-- As with above it was also developed on x64_86, it will work on the 32bit equiv.,
-  and will most likely work on ARM platforms supported by the LLVM atomic 
-  intrinsics and Rust's standard lib.
+- This project was only tested on OS X and Linux, no guarantee it will work on Windows.
+- As with above it was also only tested on x64_86 and x86. It will most likely work on 
+  ARM platforms supported by the LLVM atomic intrinsics and Rust's standard lib.
 
 Error Handling
 - Any errors that arise from deterministic misuse problems will fail!().
