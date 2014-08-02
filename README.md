@@ -1,5 +1,7 @@
+ [![Build Status](https://travis-ci.org/ballard26/concurrent-hamt.svg?branch=master)](https://travis-ci.org/ballard26/concurrent-hamt)
 Concurrent, wait-free, non-blocking, hash array map trie in Rust
 ----------------------------------------------------------------------
+
 A naive/experimental implementation of a concurrent HAMT using 
 HazardPointers for safe memory deallocation and an exponential back-off 
 algorithm for basic memory contention management.
