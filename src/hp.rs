@@ -211,9 +211,6 @@ impl<T> Hp<T> {
         Hp { _inner_ptr: unsafe { mem::transmute::<_, *mut HpInner<T>>(new_inner) } }
     }
 
-    /// Unsafe internal delete function that ensures no hazards exits
-    /// for items on the list before calling their 'drop' method to
-    /// delete the item permanently.
     #[inline(always)]
     unsafe fn delete_scan(&self, add: *const T) {
         (*self._inner_ptr).delete_scan(add);
