@@ -35,9 +35,9 @@
  *  "Concurrent Tries with Efficient Non-Blocking Snapshots".
  */
 
-use hp::{ProtectedPointer, Hp, ModifiedData};
 use std::hash::{Hash, Hasher, sip};
 use std::collections::bitv::Bitv;
+use hp::{ProtectedPointer, Hp};
 use std::rand;
 
 // Settings for 64bit (0x3f, 6, 64, 64). 
@@ -195,8 +195,8 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                     Ok(_) =>
                         if cont_search { continue 'search }
                         else { return },
-                    Err(ModifiedData) => continue 'search, 
-                    _                 => continue 'start
+                    // Shouldn't  I be able to continue search here?
+                    Err(_) => continue 'start 
                 };
             }
         }
@@ -262,7 +262,8 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         self.repair_deleted_node(&mut pre_node, state.prev(), None);
                         return true;
                     }
-                    _ => continue 'start
+                    // Shouldn't  I be able to continue search here?
+                    Err(_) => continue 'start
                 };
             }
         }
@@ -438,7 +439,7 @@ mod tests {
     use super::HAMT;
     
     static num_threads: uint = 8; 
-    static num_elements: uint = 1000;
+    static num_elements: uint = 10000;
 
     #[test]
     fn all_accounted_for() {

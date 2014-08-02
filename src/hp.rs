@@ -44,22 +44,6 @@ use std::io::Timer;
 use std::cmp;
 use std::mem;
 
-/**
- * Possible error states from a failed attempt to change(or read) 
- * the state of Hp<T>. Note there is really only one state at the
- * moment; there used to be more in previous versions. Will probably
- * remove.
- */
-#[deriving(PartialEq)]
-pub enum HpErr {
-    /// Whatever is being accessed has been deleted since last acquired.
-    DeletedData,
-    /// The data being accessed has been modified since last acquired.
-    ModifiedData,
-    /// The data being accessed has never existed.
-    NullData
-}
-
 /** 
  * Guarantees that what it points to will not be deleted or modified.
  */
@@ -146,9 +130,9 @@ impl<T> ProtectedPointer<T> {
    
     /// Replace the value the ProtectedPointer is pointing to with another.
     /// Succeeds iff the value the ProtectedPointer is pointing to is the
-    /// current value of the Hp. Otherwise it returns an HpErr.
+    /// current value of the Hp.
     #[inline(always)]
-    pub fn replace(&mut self, new: T) -> Result<(), HpErr> {
+    pub fn replace(&mut self, new: T) -> Result<(), ()> {
         if self._is_loaded {
             unsafe { (*self._inner_ptr).replace(self._inner_val, new) }
         } else {
@@ -255,13 +239,11 @@ impl<T> HpInner<T> {
     /// old; else, free new. Frees are held at task-local 
     /// granularity until they don't present a hazard.
     ///
-    /// Effects
-    /// ===========
     /// Old or new data is added to a task-local vec until it can be 
     /// safely deleted. If the replacement fails an HpErr is returned
-    /// describe. the reasons why.
+    /// describing the reasons why.
     #[inline(always)]
-    fn replace(&mut self, current: *mut InnerProtect<T>, new: T) -> Result<(), HpErr> {
+    fn replace(&mut self, current: *mut InnerProtect<T>, new: T) -> Result<(), ()> {
         unsafe {
             debug_assert!(!(*current).ptr.is_null(), "ProtectedPointer never set!");
 
@@ -275,7 +257,7 @@ impl<T> HpInner<T> {
                 Ok(())
             } else {
                 drop(mem::transmute::<_, Box<T>>(new_ref));
-                Err(ModifiedData)
+                Err(())
             }
         }
     }
@@ -304,7 +286,7 @@ impl<T> HpInner<T> {
         }
     }
 
-    /// Unsafe internal delete function that ensures no hazards exits
+    /// Unsafe internal delete function that ensures no hazards exist
     /// for items on the list before calling their 'drop' method to
     /// delete the item permanently.
     #[inline(never)]
@@ -360,8 +342,8 @@ impl<T> HpInner<T> {
                             if !hashset.contains(x) {
                                 drop(mem::transmute::<_, Box<T>>(*x as *mut T));
 
-                                // Iff the outbound weight is 0 can we deleted as there can't be any
-                                // possible references to it at this point.
+                                // Iff the outbound weight is 0 can we safely delete an HpInner
+                                // as there can't be any possible references to it at this point.
                                 if atomic_xsub_relaxed(&mut (*(*inner as *mut HpInner<T>))._outbound, 1) == 0 {
                                     drop(mem::transmute::<_, Box<HpInner<T>>>(*inner as *mut HpInner<T>));
                                 }
