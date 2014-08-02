@@ -438,7 +438,7 @@ mod tests {
     use super::HAMT;
     
     static num_threads: uint = 8; 
-    static num_elements: uint = 100000;
+    static num_elements: uint = 1000;
 
     #[test]
     fn all_accounted_for() {

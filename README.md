@@ -42,14 +42,13 @@ Horrible.
 
 Todo
 ----------------------------------------------------------------------
-Check the top of every source file for a todo list. If you have any comments
-or suggestions on things not in any of the todo lists please contact me.
+Check the top of every source file for a todo list. 
 
 Notes
 ----------------------------------------------------------------------
 Credit
-- See the top of every source file for citations to research papers I
-  used for references while making this.
+- See top of source files for citations to research papers I referenced while
+  writing code in file.
 
 Compatibility
 - This project was developed and tested on OS X, however, since it doesn't rely
