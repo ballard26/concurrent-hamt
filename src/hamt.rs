@@ -140,8 +140,14 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
 
                 // Map current node to new node.
                 let (new_node, cont_search) = match *cur_node {
-                    ref node @ MappedNode(ref map, ref arr) 
-                    | ref node @ RootedNode(ref map, ref arr) =>
+                    ref node @ MappedNode(..) 
+                    | ref node @ RootedNode(..) => {
+                        let (map, arr) = match *node {
+                            MappedNode(ref map, ref arr)
+                            | RootedNode(ref map, ref arr) =>
+                                (map, arr),
+                            _ => unreachable!()
+                        };
                         match state.compressed_index(map) {
                             Ok(idx) => {
                                 pre_node.set(&arr[idx]);
@@ -163,7 +169,8 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                                         (RootedNode(bitmap, arrmap), false)
                                 }
                             }
-                        },
+                        }
+                    }
                     ValuedNode(ref k, ref v) =>
                         if *k == key {
                             return;
@@ -277,8 +284,14 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                                insert: Option<(&Bitv, &Vec<Hp<HAMTInner<K,V>>>)>
                                ) -> bool {
         let (new_node, ret_val) = match **value {
-            ref node @ MappedNode(ref map, ref arr) 
-            | ref node @ RootedNode(ref map, ref arr) =>
+            ref node @ MappedNode(..) 
+            | ref node @ RootedNode(..) => {
+                let (map, arr) = match *node {
+                    MappedNode(ref map, ref arr)
+                    | RootedNode(ref map, ref arr) =>
+                        (map, arr),
+                    _ => unreachable!()
+                };
                 match sstate.compressed_index(map) {
                     Ok(idx) => {
                         let mut arrmap = arr.clone();
@@ -325,7 +338,8 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         }
                     }
                     _ => return false
-                },
+                }
+            }
             _ => return false
         };
 
