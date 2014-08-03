@@ -39,7 +39,6 @@ use hp::{ProtectedPointer, Hp};
 use bits::Bits;
 use std::rand;
 
-// Settings for 64bit (0x3f, 6, 64, 64). 
 static index_map: uint = 0x1f;
 static index_size: uint = 5;
 static hash_size: uint = 64;
@@ -93,6 +92,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
     pub fn search(&self, key: K) -> Option<V> {
         let mut pre_node = ProtectedPointer::new(&self.root);
         let mut cur_node = ProtectedPointer::new(&self.root);
+
         let mut state = SearchState::new(self, &key);
 
         'search: loop {
@@ -179,7 +179,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         },
                     DeletedMap(ref map, ref arr) => {
                         self.repair_deleted_node(&mut pre_node, state.prev(),
-                        if arr.len() > 0 {
+                            if arr.len() > 0 {
                                 Some((map, arr))
                             } else {
                                  None
@@ -243,7 +243,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         }, 
                      DeletedMap(ref map, ref arr) => {
                         self.repair_deleted_node(&mut pre_node, state.prev(),
-                           if arr.len() > 0 {
+                            if arr.len() > 0 {
                                 Some((map, arr))
                             } else {
                                  None
@@ -359,9 +359,9 @@ struct SearchState<'a, K> {
     hash_gen: sip::SipHasher,
     hash_base: u64,
     curr_key: &'a K,
+    curr_off: uint,
     curr_lvl: uint,
-    curr_hsh: u64,
-    bits_lft: uint
+    curr_hsh: u64
 }
 
 impl<'a, K: Hash> SearchState<'a, K> {
@@ -371,9 +371,9 @@ impl<'a, K: Hash> SearchState<'a, K> {
             hash_gen: sip::SipHasher::new_with_keys(root.hash_base, 0),
             hash_base: root.hash_base,
             curr_key: key,
+            curr_off: 0,
             curr_lvl: 0,
-            curr_hsh: 0,
-            bits_lft: hash_size 
+            curr_hsh: 0
         };
 
         new_state.curr_hsh = new_state.hash_gen.hash(key);
@@ -382,30 +382,28 @@ impl<'a, K: Hash> SearchState<'a, K> {
 
     #[inline(always)]
     fn next(&mut self) {
-        self.bits_lft -= index_size;
+        self.curr_off += index_size;
         self.curr_lvl += 1;
 
         // Rehash if needed.
-        if self.bits_lft < index_size {
+        if (self.curr_off + index_size) > hash_size {
             self.hash_gen =  sip::SipHasher::new_with_keys(self.hash_base, self.curr_lvl as u64);
             self.curr_hsh = (self.hash_gen).hash(self.curr_key);
-            self.bits_lft = hash_size;
+            self.curr_off = 0;
         }
     }
 
-    /// This is probably wrong! Need to correct before implementing the
-    /// DelayedRes type in HAMTInner<K,V>.
     #[inline(always)]
     fn prev<'b>(&'b mut self) -> &'b mut SearchState<'a, K> {
         // Undo a rehash if needed.
-        if self.bits_lft == hash_size {
+        if self.curr_off == 0 {
             let lvls_per_hash: uint = hash_size / index_size;
             
             self.hash_gen = sip::SipHasher::new_with_keys(self.hash_base, (self.curr_lvl - lvls_per_hash) as u64);
             self.curr_hsh = (self.hash_gen).hash(self.curr_key);
-            self.bits_lft = index_size + (hash_size - lvls_per_hash);
+            self.curr_off = (lvls_per_hash-1)*index_size;
         } else {
-            self.bits_lft += index_size;
+            self.curr_off -= index_size;
         }
 
         self.curr_lvl -= 1;
@@ -414,12 +412,12 @@ impl<'a, K: Hash> SearchState<'a, K> {
 
     #[inline(always)]
     fn compressed_index(&mut self, bitmap: &uint) -> Result<uint, uint> {
-        let uncompressed_index = (self.curr_hsh >> (self.curr_lvl * index_size)) 
-                                    & index_map as u64;
+        let uncompressed_index = ((self.curr_hsh >> self.curr_off) as uint)
+                                    & index_map;
 
         let compressed_index = bitmap.count((uncompressed_index+1) as uint);
-        
-        if bitmap.get(uncompressed_index as uint) {
+       
+        if bitmap.get(uncompressed_index) {
             Ok(compressed_index) 
         } else { 
             Err(compressed_index) 
@@ -429,12 +427,12 @@ impl<'a, K: Hash> SearchState<'a, K> {
     #[inline(always)]
     fn uncompressed_index(&mut self, key: &K) -> uint {
         let hash = self.hash_gen.hash(key);
-        ((hash >> (self.curr_lvl * index_size)) & index_map as u64) as uint
+        ((hash >> self.curr_off) as uint) & index_map
     }
 
     #[inline(always)]
     fn current_uncompressed_index(&mut self) -> uint {
-        ((self.curr_hsh >> (self.curr_lvl * index_size)) & index_map as u64) as uint
+        ((self.curr_hsh >> self.curr_off) as uint) & index_map
     }
 }
 

@@ -1,6 +1,5 @@
 pub trait Bits {
     fn set(&mut self, loc: uint, val: bool);
-    fn unset(&mut self, loc: uint);
     fn get(&self, loc: uint) -> bool;
     fn count(&self, offset: uint) -> uint;
 }
@@ -16,13 +15,8 @@ impl Bits for uint {
     }
     
     #[inline(always)]
-    fn unset(&mut self, loc: uint) {
-        *self = *self & !(1 << loc);
-    }
-
-    #[inline(always)]
     fn get(&self, loc: uint) -> bool {
-        if (*self & (1 << loc)) > 0  { true } else { false }
+        if (*self & (1 << loc)) != 0  { true } else { false }
     }
 
     #[cfg(target_word_size = "32")]
@@ -30,18 +24,16 @@ impl Bits for uint {
     fn count(&self, offset: uint) -> uint {
         unsafe { 
             use std::intrinsics::ctpop32;
-            ctpop32((*self >> offset) as u32) as uint 
+            if offset == 32 { 0 } else { ctpop32((*self >> offset) as u32) as uint }
         }
     }
 
     #[cfg(target_word_size = "64")]
     #[inline(always)]
     fn count(&self, offset: uint) -> uint {
-        // 32 is a possible input!
-        // pushing bits to left doesn't remove them!
         unsafe { 
             use std::intrinsics::ctpop64;
-            ctpop64((*self >> offset) as u64) as uint 
+            if offset == 64 { 0 } else { ctpop64((*self >> offset) as u64) as uint }
         }
     }
 }
