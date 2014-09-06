@@ -6,3 +6,5 @@ target/
 *.so
 *.swp
 *~
+Cargo.lock
+

@@ -3,6 +3,6 @@ name = "hamt"
 version = "0.0.1"
 authors = ["Brandon Allard <ballard2626@gmail.com>"]
 
-[[lib]]
+[lib]
 name = "hamt"
 path = "src/lib.rs"
