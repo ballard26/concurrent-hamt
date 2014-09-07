@@ -41,6 +41,7 @@ use std::ptr::{mut_null, null};
 use std::cell::RefCell;
 use std::ty::Unsafe;
 use std::io::Timer;
+use std::time::duration::Duration;
 use std::cmp;
 use std::mem;
 
@@ -272,7 +273,9 @@ impl<T> HpInner<T> {
             // Block task exponentially.
             if failures > exp_threshold {
                 let mut timer = Timer::new().unwrap();
-                timer.sleep(1 << ( cmp::min((c*failures), m) / 1000000 ));
+                timer.sleep(
+                    Duration::milliseconds(1 << ( cmp::min((c*failures), m) / 1000000 ))
+                );
             }
             false
         }

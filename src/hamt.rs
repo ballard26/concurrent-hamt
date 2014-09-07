@@ -355,7 +355,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
  * Internal state that defines all vars
  * needed to traverse the HAMT.
  */
-struct SearchState<'a, K> {
+struct SearchState<'a, K: 'a> {
     hash_gen: sip::SipHasher,
     hash_base: u64,
     curr_key: &'a K,
@@ -364,7 +364,7 @@ struct SearchState<'a, K> {
     curr_hsh: u64
 }
 
-impl<'a, K: Hash> SearchState<'a, K> {
+impl<'a, K: Hash + 'a> SearchState<'a, K> {
     #[inline(always)]
     fn new<V>(root: &HAMT<K,V>, key: &'a K) -> SearchState<'a, K> {
         let mut new_state = SearchState {
