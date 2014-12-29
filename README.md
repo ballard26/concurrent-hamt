@@ -1,4 +1,4 @@
-Concurrent, wait-free, non-blocking, hash array mapped trie in Rust
+Lock-free hash array mapped trie in Rust
 ----------------------------------------------------------------------
 [![Build Status](https://travis-ci.org/ballard26/concurrent-hamt.svg?branch=master)](https://travis-ci.org/ballard26/concurrent-hamt)
 
