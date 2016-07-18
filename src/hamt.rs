@@ -1,8 +1,5 @@
-#![license = "MIT"]
-#![experimental]
-
 /*!
- * TODO 
+ * TODO
  * ======
  * - (D, 1) Ensure drops chain, e.g. Vec< Hp<T> > will call Hp's drop
  *   when it is dropped.
@@ -17,31 +14,31 @@
  * - (N, ?) Use index resizing to bring search from O(log(n)) -> O(1).
  *      - Resizing makes sense on a mutable imperative structure, however,
  *        the naive way of doing it is detrimental to a persistent functional
- *        one in which copying is commonplace. 
+ *        one in which copying is commonplace.
  * - (N, 1) Implement traits from std::Collections.
- * - (N, 3) Have a LinkedNode for when level exceeds capacity of a uint.
- * - (N, ?) Figure out the stack-overflow problems that mat result from dropping the 
+ * - (N, 3) Have a LinkedNode for when level exceeds capacity of a usize.
+ * - (N, ?) Figure out the stack-overflow problems that mat result from dropping the
  *   head of a large tree(lots of function calls from drop glue deallocating
  *   space).
  * - (N, 2) Refactor the trie contracting in repair_deleted_node(..).
  *
  * Credit
  * =======
- * Bagwell, Phil (2000). "Ideal Hash Trees". 
+ * Bagwell, Phil (2000). "Ideal Hash Trees".
  *  Infoscience Department, École Polytechnique Fédérale de Lausanne.
  *
  * Prokopec, A., Bronson N., Bagwell P., Odersky M. (2011).
  *  "Concurrent Tries with Efficient Non-Blocking Snapshots".
  */
 
-use std::hash::{Hash, Hasher, sip};
+use std::hash::{Hash, Hasher, SipHasher};
 use hp::{ProtectedPointer, Hp};
 use bits::Bits;
-use std::rand;
+use rand;
 
-static index_map: uint = 0x1f;
-static index_size: uint = 5;
-static hash_size: uint = 64;
+const INDEX_MAP: usize = 0x1f;
+const INDEX_SIZE: usize = 5;
+const HASH_SIZE: usize = 64;
 
 pub struct HAMT<K,V> {
     hash_base: u64,
@@ -56,15 +53,15 @@ pub struct HAMT<K,V> {
 // each state are the possible states it can transition into.
 enum HAMTInner<K, V> {
     // RootedNode -> RootedNode: Add/remove an element to vec.
-    RootedNode(uint, Vec<Hp<HAMTInner<K,V>>>),
+    RootedNode(usize, Vec<Hp<HAMTInner<K,V>>>),
     // MappedNode -> MappedNode: Add/remove an element to vec.
     // MappedNode -> DeletedMap: vec.len() < 2.
-    MappedNode(uint, Vec<Hp<HAMTInner<K,V>>>),
+    MappedNode(usize, Vec<Hp<HAMTInner<K,V>>>),
     // ValuedNode -> MappedNode: collision with another ValuedNode
     // ValuedNode -> DeletedVal: removal from HAMT.
     ValuedNode(K, V),
     // Parent is modified to include any vals in vec.
-    DeletedMap(uint, Vec<Hp<HAMTInner<K,V>>>),
+    DeletedMap(usize, Vec<Hp<HAMTInner<K,V>>>),
     // Parent is modified to remove DeletedVal from vec.
     DeletedVal
 }
@@ -80,6 +77,8 @@ impl<K,V> Clone for HAMT<K,V> {
 
 impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
     pub fn new() -> HAMT<K,V> {
+        use self::HAMTInner::*;
+
         HAMT {
             hash_base: rand::random::<u64>(),
             root: Hp::init(RootedNode(
@@ -90,6 +89,8 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
     /// Guaranteed to find any value existent in the hamt before and during
     /// the function call.
     pub fn search(&self, key: K) -> Option<V> {
+        use self::HAMTInner::*;
+
         let mut pre_node = ProtectedPointer::new(&self.root);
         let mut cur_node = ProtectedPointer::new(&self.root);
 
@@ -100,27 +101,29 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
             cur_node.load();
 
             match *cur_node {
-                MappedNode(ref map, ref arr) 
-                | DeletedMap(ref map,ref arr) 
-                | RootedNode(ref map, ref arr) => 
+                MappedNode(ref map, ref arr)
+                | DeletedMap(ref map,ref arr)
+                | RootedNode(ref map, ref arr) =>
                     match state.compressed_index(map) {
                         Ok(idx) => {
                             pre_node.set(&arr[idx]);
 
-                            state.next(); 
-                            continue 'search; 
-                        } 
-                        Err(_) => return None 
-                    }, 
-                ValuedNode(ref k, ref v) if *k == key => 
-                    return Some(v.clone()), 
+                            state.next();
+                            continue 'search;
+                        }
+                        Err(_) => return None
+                    },
+                ValuedNode(ref k, ref v) if *k == key =>
+                    return Some(v.clone()),
                 _ => return None
-            }; 
+            };
         }
     }
 
     /// Guaranteed to insert key/value into hamt.
     pub fn insert(&self, key: K, value: V) {
+        use self::HAMTInner::*;
+
         'start: loop {
             let mut cur_node = ProtectedPointer::new(&self.root);
             let mut pre_node = ProtectedPointer::new(&self.root);
@@ -134,7 +137,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
 
                 // Map current node to new node.
                 let (new_node, cont_search) = match *cur_node {
-                    ref node @ MappedNode(..) 
+                    ref node @ MappedNode(..)
                     | ref node @ RootedNode(..) => {
                         let (map, arr) = match *node {
                             MappedNode(ref map, ref arr)
@@ -169,12 +172,12 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         if *k == key {
                             return;
                         } else {
-                            let mut bitmap = 0u; 
+                            let mut bitmap: usize = 0;
                             bitmap.set(state.uncompressed_index(k), true);
 
                             let mut arrmap = Vec::with_capacity(1);
                             arrmap.insert(0, self.root.new(ValuedNode(k.clone(), v.clone())));
-                            
+
                             (MappedNode(bitmap, arrmap), true)
                         },
                     DeletedMap(ref map, ref arr) => {
@@ -197,14 +200,14 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         if cont_search { continue 'search }
                         else { return },
                     // Shouldn't I be able to continue search here?
-                    Err(_) => continue 'start 
+                    Err(_) => continue 'start
                 };
             }
         }
     }
 
     // At the moment the structure is being lazily repaired.
-    // E.g. remove is simply replacing the Deleted(Map/Val) with 
+    // E.g. remove is simply replacing the Deleted(Map/Val) with
     // nothing then letting the next remove/insert repair the
     // parent. This has a chance of wasting space, if it does
     // one can just have remove attempt to repair right away.
@@ -212,6 +215,8 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
     /// Guaranteed to remove any value existent in the hamt before and during
     /// the function call.
     pub fn remove(&self, key: K) -> bool {
+        use self::HAMTInner::*;
+
         'start: loop {
             let mut cur_node = ProtectedPointer::new(&self.root);
             let mut pre_node = ProtectedPointer::new(&self.root);
@@ -224,7 +229,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
 
                 // Map current node to new node.
                 let new_node = match *cur_node {
-                    MappedNode(ref map, ref arr) 
+                    MappedNode(ref map, ref arr)
                     | RootedNode(ref map, ref arr) =>
                         match state.compressed_index(map) {
                             Ok(idx) => {
@@ -240,7 +245,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                             DeletedVal
                         } else {
                             return false;
-                        }, 
+                        },
                      DeletedMap(ref map, ref arr) => {
                         self.repair_deleted_node(&mut pre_node, state.prev(),
                             if arr.len() > 0 {
@@ -255,7 +260,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                         continue 'start;
                     }
                 };
-                
+
                 match cur_node.replace(new_node) {
                     Ok(_) => {
                         self.repair_deleted_node(&mut pre_node, state.prev(), None);
@@ -273,10 +278,12 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
     fn repair_deleted_node<'a>(&self,
                                value: &mut ProtectedPointer<HAMTInner<K,V>>,
                                sstate: &mut SearchState<'a, K>,
-                               insert: Option<(&uint, &Vec<Hp<HAMTInner<K,V>>>)>
+                               insert: Option<(&usize, &Vec<Hp<HAMTInner<K,V>>>)>
                                ) -> bool {
+        use self::HAMTInner::*;
+
         let (new_node, ret_val) = match **value {
-            ref node @ MappedNode(..) 
+            ref node @ MappedNode(..)
             | ref node @ RootedNode(..) => {
                 let (map, arr) = match *node {
                     MappedNode(ref map, ref arr)
@@ -295,11 +302,11 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                                 let val = &arr[0];
                                 let mut temp_value = ProtectedPointer::new(val);
 
-                                // Load is fine since the calling function is 
+                                // Load is fine since the calling function is
                                 // protecting the Hp.
                                 temp_value.load();
 
-                                // See if the remaining element in a DeletedMap 
+                                // See if the remaining element in a DeletedMap
                                 // can be contracted.
                                 match *temp_value {
                                     MappedNode(..)
@@ -311,7 +318,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                                         arrmap.insert(idx, val.clone()),
                                     DeletedVal =>
                                         bitmap.set(sstate.current_uncompressed_index(), false),
-                                    _ => fail!("Unexpected value!")
+                                    _ => panic!("Unexpected value!")
                                 }
                             }
                             None =>
@@ -329,7 +336,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
                                     (MappedNode(bitmap, arrmap), true)
                                 },
                             RootedNode(..) => (RootedNode(bitmap, arrmap), true),
-                            _ => fail!("Unexpected value!")
+                            _ => panic!("Unexpected value!")
                         }
                     }
                     _ => return false
@@ -340,7 +347,7 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
 
         // There is no guarantee that the cur_node is
         // pointing to valid data or not. However, that
-        // doesn't matter, either the current address is the 
+        // doesn't matter, either the current address is the
         // same as the previously read one, or it changed.
         // We don't bother reading the changed one, hence it
         // doesn't matter if it's valid.
@@ -356,19 +363,25 @@ impl<K: Hash + PartialEq + Clone, V: Clone> HAMT<K,V> {
  * needed to traverse the HAMT.
  */
 struct SearchState<'a, K: 'a> {
-    hash_gen: sip::SipHasher,
+    hash_gen: SipHasher,
     hash_base: u64,
     curr_key: &'a K,
-    curr_off: uint,
-    curr_lvl: uint,
+    curr_off: usize,
+    curr_lvl: usize,
     curr_hsh: u64
 }
 
 impl<'a, K: Hash + 'a> SearchState<'a, K> {
+    fn hash_update(&mut self) {
+        let mut hash_gen = self.hash_gen.clone();
+        self.curr_key.hash(&mut hash_gen);
+        self.curr_hsh = hash_gen.finish();
+    }
+
     #[inline(always)]
     fn new<V>(root: &HAMT<K,V>, key: &'a K) -> SearchState<'a, K> {
         let mut new_state = SearchState {
-            hash_gen: sip::SipHasher::new_with_keys(root.hash_base, 0),
+            hash_gen: SipHasher::new_with_keys(root.hash_base, 0),
             hash_base: root.hash_base,
             curr_key: key,
             curr_off: 0,
@@ -376,19 +389,21 @@ impl<'a, K: Hash + 'a> SearchState<'a, K> {
             curr_hsh: 0
         };
 
-        new_state.curr_hsh = new_state.hash_gen.hash(key);
+        //new_state.curr_hsh = new_state.hash_gen.hash(key);
+        new_state.hash_update();
         new_state
     }
 
     #[inline(always)]
     fn next(&mut self) {
-        self.curr_off += index_size;
+        self.curr_off += INDEX_SIZE;
         self.curr_lvl += 1;
 
         // Rehash if needed.
-        if (self.curr_off + index_size) > hash_size {
-            self.hash_gen =  sip::SipHasher::new_with_keys(self.hash_base, self.curr_lvl as u64);
-            self.curr_hsh = (self.hash_gen).hash(self.curr_key);
+        if (self.curr_off + INDEX_SIZE) > HASH_SIZE {
+            self.hash_gen =  SipHasher::new_with_keys(self.hash_base, self.curr_lvl as u64);
+            //self.curr_hsh = (self.hash_gen).hash(self.curr_key);
+            self.hash_update();
             self.curr_off = 0;
         }
     }
@@ -397,13 +412,14 @@ impl<'a, K: Hash + 'a> SearchState<'a, K> {
     fn prev<'b>(&'b mut self) -> &'b mut SearchState<'a, K> {
         // Undo a rehash if needed.
         if self.curr_off == 0 {
-            let lvls_per_hash: uint = hash_size / index_size;
-            
-            self.hash_gen = sip::SipHasher::new_with_keys(self.hash_base, (self.curr_lvl - lvls_per_hash) as u64);
-            self.curr_hsh = (self.hash_gen).hash(self.curr_key);
-            self.curr_off = (lvls_per_hash-1)*index_size;
+            let lvls_per_hash: usize = HASH_SIZE / INDEX_SIZE;
+
+            self.hash_gen = SipHasher::new_with_keys(self.hash_base, (self.curr_lvl - lvls_per_hash) as u64);
+            //self.curr_hsh = (self.hash_gen).hash(self.curr_key);
+            self.hash_update();
+            self.curr_off = (lvls_per_hash-1)*INDEX_SIZE;
         } else {
-            self.curr_off -= index_size;
+            self.curr_off -= INDEX_SIZE;
         }
 
         self.curr_lvl -= 1;
@@ -411,194 +427,196 @@ impl<'a, K: Hash + 'a> SearchState<'a, K> {
     }
 
     #[inline(always)]
-    fn compressed_index(&mut self, bitmap: &uint) -> Result<uint, uint> {
-        let uncompressed_index = ((self.curr_hsh >> self.curr_off) as uint)
-                                    & index_map;
+    fn compressed_index(&mut self, bitmap: &usize) -> Result<usize, usize> {
+        let uncompressed_index = ((self.curr_hsh >> self.curr_off) as usize)
+                                    & INDEX_MAP;
 
-        let compressed_index = bitmap.count((uncompressed_index+1) as uint);
-       
+        let compressed_index = bitmap.count((uncompressed_index+1) as usize);
+
         if bitmap.get(uncompressed_index) {
-            Ok(compressed_index) 
-        } else { 
-            Err(compressed_index) 
+            Ok(compressed_index)
+        } else {
+            Err(compressed_index)
         }
     }
 
     #[inline(always)]
-    fn uncompressed_index(&mut self, key: &K) -> uint {
-        let hash = self.hash_gen.hash(key);
-        ((hash >> self.curr_off) as uint) & index_map
+    fn uncompressed_index(&mut self, key: &K) -> usize {
+        //let hash = self.hash_gen.hash(key);
+        let mut hash_gen = self.hash_gen.clone();
+        key.hash(&mut hash_gen);
+        let hash = hash_gen.finish();
+        ((hash >> self.curr_off) as usize) & INDEX_MAP
     }
 
     #[inline(always)]
-    fn current_uncompressed_index(&mut self) -> uint {
-        ((self.curr_hsh >> self.curr_off) as uint) & index_map
+    fn current_uncompressed_index(&mut self) -> usize {
+        ((self.curr_hsh >> self.curr_off) as usize) & INDEX_MAP
     }
 }
 
 #[cfg(test)]
 mod tests {
-    extern crate native;
-    extern crate sync;
-
-    use self::native::NativeTaskBuilder;
-    use self::sync::{Arc, Barrier};
-    use std::task::TaskBuilder;
+    use std::thread;
+    use std::sync::{Arc, Barrier};
     use super::HAMT;
-    
-    static num_threads: uint = 8; 
-    static num_elements: uint = 50000;
+
+    const NUM_THREADS: usize = 8;
+    const NUM_ELEMENTS: usize = 50000;
 
     #[test]
     fn all_accounted_for() {
-        let amt: HAMT<uint, uint> = HAMT::new();
-        for i in range(0, num_elements) { amt.insert(i, i); };
-        for i in range(0, num_elements) { 
-            if amt.search(i).is_none() { 
-                fail!("Well this is embarrassing."); 
-            } 
+        let amt: HAMT<usize, usize> = HAMT::new();
+        for i in 0..NUM_ELEMENTS { amt.insert(i, i); };
+        for i in 0..NUM_ELEMENTS {
+            if amt.search(i).is_none() {
+                panic!("Well this is embarrassing.");
+            }
         }
     }
 
     #[test]
     fn all_accounted_for_parallel() {
-        let amt: HAMT<uint, uint> = HAMT::new();
-        let barrier = Arc::new(Barrier::new(num_threads+1));
+        let amt: HAMT<usize, usize> = HAMT::new();
+        let barrier = Arc::new(Barrier::new(NUM_THREADS+1));
+        let mut guards = vec![];
 
-        for x in range(0, num_threads) {
+        for x in 0..NUM_THREADS {
             let lamt = amt.clone();
             let c = barrier.clone();
-            TaskBuilder::new().native().spawn(proc() {
-                for i in range((num_elements*x), num_elements*(x+1)) {    
+            guards.push(thread::spawn(move || {
+                for i in (NUM_ELEMENTS*x)..NUM_ELEMENTS*(x+1) {
                         lamt.insert(i, i);
                 }
                 c.wait();
-            });
+            }));
         }
-        
+
         barrier.wait();
-        for i in range(0, num_threads*num_elements) {
+        for i in 0..NUM_THREADS*NUM_ELEMENTS {
             if amt.search(i).is_none() {
-                fail!("Something went horribly wrong.");
+                panic!("Something went horribly wrong.");
             }
         }
     }
 
     #[test]
     fn all_removed() {
-        let amt: HAMT<uint, uint> = HAMT::new();
-        for i in range(0, num_elements) { amt.insert(i, i); };
-        for i in range(0, num_elements) { 
-            if amt.search(i).is_none() { 
-                fail!("Not the first{}", i);
+        let amt: HAMT<usize, usize> = HAMT::new();
+        for i in 0..NUM_ELEMENTS { amt.insert(i, i); };
+        for i in 0..NUM_ELEMENTS {
+            if amt.search(i).is_none() {
+                panic!("Not the first{}", i);
             }
         }
-        for i in range(0, num_elements) { 
-            if !amt.remove(i) { 
-                fail!("{}, ", i);
+        for i in 0..NUM_ELEMENTS {
+            if !amt.remove(i) {
+                panic!("{}, ", i);
             }
         }
-        for i in range(0, num_elements) { 
+        for i in 0..NUM_ELEMENTS {
             if amt.search(i).is_some() {
-                fail!("Fiddle Sticks[{}], ", i);
+                panic!("Fiddle Sticks[{}], ", i);
             }
         }
     }
 
     #[test]
     fn all_removed_parallel() {
-        let amt: HAMT<uint, uint> = HAMT::new();
-        let barrier = Arc::new(Barrier::new(num_threads+1));
+        let amt: HAMT<usize, usize> = HAMT::new();
+        let barrier = Arc::new(Barrier::new(NUM_THREADS+1));
+        let mut guards = vec![];
 
-        for x in range(0, num_threads) {
+        for x in 0..NUM_THREADS {
             let lamt = amt.clone();
             let c = barrier.clone();
-            TaskBuilder::new().native().spawn(proc() {
-                for i in range((num_elements*x), num_elements*(x+1)) {    
+            guards.push(thread::spawn(move || {
+                for i in (NUM_ELEMENTS*x)..(NUM_ELEMENTS*(x+1)) {
                         lamt.insert(i, i);
                 }
                 c.wait();
-            });
+            }));
         }
-        
+
         barrier.wait();
-        for x in range(0, num_threads) {
+        for x in 0..NUM_THREADS {
             let lamt = amt.clone();
             let c = barrier.clone();
-            TaskBuilder::new().native().spawn(proc() {
-                for i in range((num_elements*x), num_elements*(x+1)) {    
+            guards.push(thread::spawn(move || {
+                for i in (NUM_ELEMENTS*x)..(NUM_ELEMENTS*(x+1)) {
                         lamt.remove(i);
                         if lamt.search(i).is_some() {
-                            fail!("Twas a failed attempt");
+                            panic!("Twas a failed attempt");
                         }
                 }
                 c.wait();
-            });
+            }));
         }
-        
+
         barrier.wait();
-        for i in range(0, num_threads*num_elements) {
+        for i in 0..NUM_THREADS*NUM_ELEMENTS {
             if amt.search(i).is_some() {
-                fail!("Dooooom");
+                panic!("Dooooom");
             }
         }
     }
 
     #[test]
     fn mixed_ins_remove() {
-        let amt: HAMT<uint, uint> = HAMT::new();
+        let amt: HAMT<usize, usize> = HAMT::new();
 
-        for i in range(0, num_elements) { amt.insert(i, i) }
-        for i in range(0, num_elements) {
+        for i in 0..NUM_ELEMENTS { amt.insert(i, i) }
+        for i in 0..NUM_ELEMENTS {
             amt.remove(i);
-            amt.insert(i+num_elements, i+num_elements);
+            amt.insert(i+NUM_ELEMENTS, i+NUM_ELEMENTS);
         }
-        for i in range(0, num_elements) {
+        for i in 0..NUM_ELEMENTS {
             if amt.search(i).is_some() {
-                fail!("Oh well..");
+                panic!("Oh well..");
             }
-            if amt.search(i+num_elements).is_none() {
-                fail!("Something bad happened");
+            if amt.search(i+NUM_ELEMENTS).is_none() {
+                panic!("Something bad happened");
             }
         }
     }
 
     #[test]
     fn mixed_ins_remove_parallel() {
-        let amt: HAMT<uint, uint> = HAMT::new();
-        let barrier = Arc::new(Barrier::new(num_threads+1));
+        let amt: HAMT<usize, usize> = HAMT::new();
+        let barrier = Arc::new(Barrier::new(NUM_THREADS+1));
+        let mut guards = vec![];
 
-        for x in range(0, num_threads) {
+        for x in 0..NUM_THREADS {
             let lamt = amt.clone();
             let c = barrier.clone();
-            TaskBuilder::new().native().spawn(proc() {
-                for i in range((num_elements*x), num_elements*(x+1)) {    
+            guards.push(thread::spawn(move || {
+                for i in (NUM_ELEMENTS*x)..NUM_ELEMENTS*(x+1) {
                         lamt.insert(i, i);
                 }
                 c.wait();
-            });
+            }));
         }
-        
+
         barrier.wait();
-        for x in range(0, num_threads) {
+        for x in 0..NUM_THREADS {
             let lamt = amt.clone();
             let c = barrier.clone();
-            TaskBuilder::new().native().spawn(proc() {
-                for i in range((num_elements*x), num_elements*(x+1)) {    
+            guards.push(thread::spawn(move || {
+                for i in (NUM_ELEMENTS*x)..NUM_ELEMENTS*(x+1) {
                         lamt.remove(i);
-                        lamt.insert(i+(num_threads*num_elements), i+(num_threads*num_elements));
+                        lamt.insert(i+(NUM_THREADS*NUM_ELEMENTS), i+(NUM_THREADS*NUM_ELEMENTS));
                 }
                 c.wait();
-            });
+            }));
         }
-        
+
         barrier.wait();
-        for i in range(0, num_threads*num_elements) {
+        for i in 0..NUM_THREADS*NUM_ELEMENTS {
             if amt.search(i).is_some() {
-                fail!("Not removed properly");
+                panic!("Not removed properly");
             }
-            if amt.search(i+(num_threads*num_elements)).is_none() {
-                fail!("Not inserted properly");
+            if amt.search(i+(NUM_THREADS*NUM_ELEMENTS)).is_none() {
+                panic!("Not inserted properly");
             }
         }
     }

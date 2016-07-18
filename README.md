@@ -2,8 +2,8 @@ Lock-free hash array mapped trie in Rust
 ----------------------------------------------------------------------
 [![Build Status](https://travis-ci.org/ballard26/concurrent-hamt.svg?branch=master)](https://travis-ci.org/ballard26/concurrent-hamt)
 
-A naive/experimental implementation of a concurrent HAMT using 
-HazardPointers for safe memory deallocation and an exponential back-off 
+A naive/experimental implementation of a concurrent HAMT using
+HazardPointers for safe memory deallocation and an exponential back-off
 algorithm for basic memory contention management.
 
 Usage
@@ -20,40 +20,42 @@ git = "https://github.com/ballard26/concurrent-hamt"
 
 And then an example usage:
 ```rust
-extern crate hamt;
+extern crate concurrent_hamt;
 
-use hamt::hamt::HAMT;
+use concurrent_hamt::hamt::HAMT;
+use std::thread;
 
 fn main() {
     let amt: HAMT<uint, uint> = HAMT::new();
 
-    for a in range(0, 10u) {
+    let mut guards = vec![];
+    for a in 0..10 {
         let cloned_amt = amt.clone();
-        spawn(proc() {
-            for x in range(a*100, (a+1)*100u) { 
+        guards.push(thread::spawn(move || {
+            for x in range(a*100, (a+1)*100u) {
                 cloned_amt.insert(a, a);
             }
-        });
+        }));
     }
 }
 ```
 
 Todo
 ----------------------------------------------------------------------
-Check the top of every source file for a todo list. All comments and 
+Check the top of every source file for a todo list. All comments and
 contributions are more than welcome.
 
 Notes
 ----------------------------------------------------------------------
 Compatibility
 - This project was only tested on OS X and Linux, no guarantee it will work on Windows.
-- As with above it was also only tested on x64_86 and x86. It will most likely work on 
+- As with above it was also only tested on x64_86 and x86. It will most likely work on
   ARM platforms supported by the LLVM atomic intrinsics and Rust's standard lib.
 
 Error Handling
-- Any errors that arise from deterministic misuse problems will fail!().
-    E.g. a ProtectedPointer must be loaded before it's read, loads never 
-    fails if usage conditions are met, hence the program will fail!() if
+- Any errors that arise from deterministic misuse problems will panic!().
+    E.g. a ProtectedPointer must be loaded before it's read, loads never
+    fails if usage conditions are met, hence the program will panic!() if
     an unloaded ProtectedPointer is read.
 - All other errors are handled with the Result type since they arise
   due to the non-deterministic nature of a specific event.
