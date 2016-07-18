@@ -1,5 +1,5 @@
 [package]
-name = "hamt"
+name = "concurrent-hamt"
 version = "0.1.0"
 authors = ["Brandon Allard <ballard2626@gmail.com>"]
 
