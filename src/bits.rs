@@ -1,40 +1,34 @@
 pub trait Bits {
-    fn set(&mut self, loc: uint, val: bool);
-    fn get(&self, loc: uint) -> bool;
-    fn count(&self, offset: uint) -> uint;
+    fn set(&mut self, loc: usize, val: bool);
+    fn get(&self, loc: usize) -> bool;
+    fn count(&self, offset: usize) -> usize;
 }
 
-impl Bits for uint {
+impl Bits for usize {
     #[inline(always)]
-    fn set(&mut self, loc: uint, val: bool) {
+    fn set(&mut self, loc: usize, val: bool) {
         if val {
             *self = (*self & !(1 << loc)) | (1 << loc);
         } else {
             *self = *self & !(1 << loc);
         }
     }
-    
+
     #[inline(always)]
-    fn get(&self, loc: uint) -> bool {
+    fn get(&self, loc: usize) -> bool {
         if (*self & (1 << loc)) != 0  { true } else { false }
     }
 
-    #[cfg(target_word_size = "32")]
+    #[cfg(target_pointer_width = "32")]
     #[inline(always)]
-    fn count(&self, offset: uint) -> uint {
-        unsafe { 
-            use std::intrinsics::ctpop32;
-            if offset == 32 { 0 } else { ctpop32((*self >> offset) as u32) as uint }
-        }
+    fn count(&self, offset: usize) -> usize {
+        if offset == 32 { 0 } else { ((*self >> offset) as u32).count_ones() as usize }
     }
 
-    #[cfg(target_word_size = "64")]
+    #[cfg(target_pointer_width = "64")]
     #[inline(always)]
-    fn count(&self, offset: uint) -> uint {
-        unsafe { 
-            use std::intrinsics::ctpop64;
-            if offset == 64 { 0 } else { ctpop64((*self >> offset) as u64) as uint }
-        }
+    fn count(&self, offset: usize) -> usize {
+        if offset == 64 { 0 } else { ((*self >> offset) as u64).count_ones() as usize }
     }
 }
 
@@ -44,7 +38,7 @@ mod bench {
 
     use self::test::Bencher;
     use std::collections::bitv::Bitv;
-    use super::Bits;    
+    use super::Bits;
 
     #[bench]
     fn count_bitv(b: &mut Bencher) {
@@ -60,8 +54,8 @@ mod bench {
     }
 
     #[bench]
-    fn count_uintv(b: &mut Bencher) {
-        let mut uvec: uint = 0;
+    fn count_usizev(b: &mut Bencher) {
+        let mut uvec: usize = 0;
         uvec.set(0, true);
         uvec.set(1, true);
         uvec.set(20, true);
@@ -72,9 +66,9 @@ mod bench {
         });
     }
 
-    fn bit_count(bitmap: &Bitv, offset: uint) -> uint {
+    fn bit_count(bitmap: &Bitv, offset: usize) -> usize {
         bitmap.iter()
-              .skip(offset + 1u)
+              .skip(offset + 1)
               .filter(|x| *x)
               .count()
     }

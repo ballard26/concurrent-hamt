@@ -29,7 +29,7 @@ fn main() {
 
     for a in range(0, 10u) {
         let cloned_amt = amt.clone();
-        spawn(proc() {
+        spawn(move || {
             for x in range(a*100, (a+1)*100u) { 
                 cloned_amt.insert(a, a);
             }
@@ -51,9 +51,9 @@ Compatibility
   ARM platforms supported by the LLVM atomic intrinsics and Rust's standard lib.
 
 Error Handling
-- Any errors that arise from deterministic misuse problems will fail!().
+- Any errors that arise from deterministic misuse problems will panic!().
     E.g. a ProtectedPointer must be loaded before it's read, loads never 
-    fails if usage conditions are met, hence the program will fail!() if
+    fails if usage conditions are met, hence the program will panic!() if
     an unloaded ProtectedPointer is read.
 - All other errors are handled with the Result type since they arise
   due to the non-deterministic nature of a specific event.

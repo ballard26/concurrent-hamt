@@ -1,8 +1,12 @@
 [package]
 name = "hamt"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Brandon Allard <ballard2626@gmail.com>"]
 
 [lib]
 name = "hamt"
 path = "src/lib.rs"
+
+[dependencies]
+rand = "0.3"
+stable-borrow-state = "0.1"
